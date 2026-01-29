@@ -67,3 +67,12 @@ make uart-monitor # Monitor UART output
    - Terminal 2: `make gdb` (loads and breaks at `main`)
 3. Listen to UART output:
    - `make uart-monitor` (115200 8N1)
+
+### Session 3
+- Added TinyUSB MIDI device support (USB MIDI descriptors + config)
+- Kept Hello World UART output in main loop
+- Verified MIDI RX via `amidi` and UART prints (Note On/Off)
+
+### Session 4
+- Added Makefile MIDI test helpers (`midi-list`, `midi-note-on`, `midi-note-off`, `midi-test`)
+- Hardened MIDI RX loop (bounded per-iteration drain)

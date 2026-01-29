@@ -64,3 +64,22 @@ You should see lines like:
 ```
 Hello World! Count: 0
 ```
+
+## MIDI Test (amidi)
+List devices:
+```bash
+make midi-list
+```
+
+Send a Note On/Off sequence (defaults NOTE=60, VEL=64):
+```bash
+make midi-test
+```
+
+Manual note control:
+```bash
+NOTE=60 VEL=100 make midi-note-on
+NOTE=60 make midi-note-off
+```
+
+If you get permission errors, run the above with sudo or add your user to the `audio` group.

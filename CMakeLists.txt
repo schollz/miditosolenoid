@@ -21,6 +21,7 @@ pico_sdk_init()
 # Add executable
 add_executable(miditosolenoid
     src/main.cpp
+    src/usb_descriptors.c
 )
 
 # Enable UART output for printf (default pins GP0=TX, GP1=RX)
@@ -30,6 +31,13 @@ pico_enable_stdio_usb(miditosolenoid 0)
 # Link required libraries
 target_link_libraries(miditosolenoid
     pico_stdlib
+    tinyusb_device
+    tinyusb_board
+)
+
+# TinyUSB config header
+target_include_directories(miditosolenoid PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/src
 )
 
 # Create map/bin/hex/uf2 files
