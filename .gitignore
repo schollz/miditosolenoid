@@ -1,0 +1,17 @@
+# Build output
+build/
+
+# Dependencies (optional - uncomment to track deps in git)
+# deps/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
