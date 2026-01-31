@@ -7,7 +7,15 @@
 
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "hardware/gpio.h"
 #include "tusb.h"
+
+static absolute_time_t led_off_deadline = nil_time;
+
+// Deadlines for auto-shutoff of each solenoid GPIO (2-9)
+static const uint8_t GPIO_BASE = 2;
+static const uint8_t GPIO_COUNT = 8;
+static absolute_time_t gpio_off_deadline[GPIO_COUNT];
 
 static void handle_midi_packet(const uint8_t packet[4]) {
     const uint8_t cin = packet[0] & 0x0F;
@@ -20,19 +28,45 @@ static void handle_midi_packet(const uint8_t packet[4]) {
     const uint8_t msg_type = status & 0xF0;
     const uint8_t channel = (status & 0x0F) + 1;
 
+    const uint8_t gpio_index = data1 % GPIO_COUNT;
+    const uint8_t gpio_pin = GPIO_BASE + gpio_index;
+
+    // Pulse onboard LED on any MIDI message
+    gpio_put(25, 1);
+    led_off_deadline = make_timeout_time_ms(100);
+
     if (msg_type == 0x90 && data2 != 0) {
-        printf("MIDI Note On  ch=%u note=%u vel=%u\n", channel, data1, data2);
+        // Note On with velocity > 0: turn on GPIO and schedule auto-off
+        // Velocity 0 -> 1ms, Velocity 127 -> 100ms (linear scale)
+        const uint32_t duration_ms = 1 + (data2 * 99 / 127);
+        gpio_put(gpio_pin, 1);
+        gpio_off_deadline[gpio_index] = make_timeout_time_ms(duration_ms);
+        printf("MIDI Note On  ch=%u note=%u vel=%u dur=%lums\n", channel, data1, data2, duration_ms);
     } else if (msg_type == 0x80 || (msg_type == 0x90 && data2 == 0)) {
-        printf("MIDI Note Off ch=%u note=%u vel=%u\n", channel, data1, data2);
+        // Note Off: do nothing, let the velocity-based timer handle shutoff
+        printf("MIDI Note Off ch=%u note=%u (ignored)\n", channel, data1);
     } else {
         printf("MIDI Msg     ch=%u status=0x%02X d1=%u d2=%u\n",
                channel, status, data1, data2);
     }
+
 }
 
 int main() {
     // Initialize stdio (UART by default)
     stdio_init_all();
+
+    // Initialize GPIOs 2-9 as outputs (solenoid channels) and LED on GPIO25
+    for (uint8_t i = 0; i < GPIO_COUNT; ++i) {
+        const uint8_t pin = GPIO_BASE + i;
+        gpio_init(pin);
+        gpio_set_dir(pin, GPIO_OUT);
+        gpio_put(pin, 0);
+        gpio_off_deadline[i] = nil_time;
+    }
+    gpio_init(25);
+    gpio_set_dir(25, GPIO_OUT);
+    gpio_put(25, 0);
 
     // Init TinyUSB device stack (MIDI)
     tusb_rhport_init_t dev_init = {
@@ -74,6 +108,23 @@ int main() {
                     break;
                 }
                 handle_midi_packet(packet);
+            }
+        }
+
+        // Ensure LED pulse is turned off on time even if no MIDI arrives.
+        // Note: handle_midi_packet updates the deadline when MIDI is received.
+        if (!is_nil_time(led_off_deadline) &&
+            absolute_time_diff_us(get_absolute_time(), led_off_deadline) <= 0) {
+            gpio_put(25, 0);
+            led_off_deadline = nil_time;
+        }
+
+        // Check solenoid GPIO deadlines and turn off expired ones
+        for (uint8_t i = 0; i < GPIO_COUNT; ++i) {
+            if (!is_nil_time(gpio_off_deadline[i]) &&
+                absolute_time_diff_us(get_absolute_time(), gpio_off_deadline[i]) <= 0) {
+                gpio_put(GPIO_BASE + i, 0);
+                gpio_off_deadline[i] = nil_time;
             }
         }
 

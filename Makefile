@@ -21,7 +21,11 @@ OPENOCD_ARGS := -f $(OPENOCD_INTERFACE) -f $(OPENOCD_TARGET)
 # GDB settings
 GDB_PORT := 3333
 ELF_FILE := $(BUILD_DIR)/$(PROJECT_NAME).elf
+UF2_FILE := $(BUILD_DIR)/$(PROJECT_NAME).uf2
 AMIDI := amidi
+
+# USB bootloader upload settings
+RPI_RP2_MOUNT := /media/$(USER)/RPI-RP2
 
 # Default target
 .PHONY: all
@@ -62,13 +66,44 @@ deps:
 		echo "Pico SDK found at $(PICO_SDK_DIR)"; \
 	fi
 
-# Upload firmware via OpenOCD
+# Upload firmware via OpenOCD, fallback to USB bootloader if debug probe unavailable
 .PHONY: upload
 upload: build
 	@echo "Uploading $(PROJECT_NAME).elf via debug probe..."
 	@$(OPENOCD) $(OPENOCD_ARGS) \
 		-c "adapter speed 5000" \
-		-c "program $(ELF_FILE) verify reset exit"
+		-c "program $(ELF_FILE) verify reset exit" 2>/dev/null || { \
+		echo "Debug probe not available, falling back to USB bootloader..."; \
+		$(MAKE) upload-usb; \
+	}
+
+# Upload firmware via USB bootloader (1200 baud touch -> copy UF2)
+.PHONY: upload-usb
+upload-usb: build
+	@echo "Triggering USB bootloader mode..."
+	@SERIAL_DEV=$$(ls /dev/ttyACM* 2>/dev/null | head -n 1); \
+	if [ -n "$$SERIAL_DEV" ]; then \
+		echo "Opening $$SERIAL_DEV at 1200 baud to enter bootloader..."; \
+		stty -F "$$SERIAL_DEV" 1200; \
+		sleep 0.1; \
+	else \
+		echo "No /dev/ttyACM* found. Please manually enter bootloader mode (hold BOOTSEL + reset)."; \
+	fi
+	@echo "Waiting for RPI-RP2 to mount..."
+	@for i in $$(seq 1 30); do \
+		if [ -d "$(RPI_RP2_MOUNT)" ]; then \
+			break; \
+		fi; \
+		sleep 0.5; \
+	done
+	@if [ ! -d "$(RPI_RP2_MOUNT)" ]; then \
+		echo "Error: $(RPI_RP2_MOUNT) did not appear after 15 seconds"; \
+		exit 1; \
+	fi
+	@echo "Copying $(UF2_FILE) to $(RPI_RP2_MOUNT)..."
+	@cp "$(UF2_FILE)" "$(RPI_RP2_MOUNT)/"
+	@sync
+	@echo "Upload complete!"
 
 # Start OpenOCD debug server (run in separate terminal)
 .PHONY: debug-server
@@ -126,7 +161,8 @@ help:
 	@echo "  make cleanall     - Clean build and dependencies"
 	@echo ""
 	@echo "Upload/Debug targets:"
-	@echo "  make upload       - Upload firmware via debug probe"
+	@echo "  make upload       - Upload firmware (debug probe, fallback to USB)"
+	@echo "  make upload-usb   - Upload firmware via USB bootloader (UF2)"
 	@echo "  make debug-server - Start OpenOCD debug server (run in terminal 1)"
 	@echo "  make gdb          - Connect GDB and load firmware (run in terminal 2)"
 	@echo "  make gdb-attach   - Connect GDB without loading"
