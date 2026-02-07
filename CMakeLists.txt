@@ -22,6 +22,10 @@ pico_sdk_init()
 add_executable(miditosolenoid
     src/main.cpp
     src/usb_descriptors.c
+    src/generative/avrlib/random.cc
+    src/generative/grids/pattern_generator.cc
+    src/generative/grids/resources.cc
+    src/generative/generative_controller.cpp
 )
 
 # Enable UART output for printf (default pins GP0=TX, GP1=RX)
@@ -35,9 +39,10 @@ target_link_libraries(miditosolenoid
     tinyusb_board
 )
 
-# TinyUSB config header
+# TinyUSB config header + generative engine includes
 target_include_directories(miditosolenoid PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src
+    ${CMAKE_CURRENT_LIST_DIR}/src/generative
 )
 
 # Create map/bin/hex/uf2 files

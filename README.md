@@ -1,85 +1,53 @@
 # MIDI to Solenoid Controller
 
-RP2040-based MIDI device for controlling solenoids. Uses a Raspberry Pi Pico Debug Probe (CMSIS-DAP) for SWD and UART.
+RP2040-based controller for driving solenoids. Two modes:
 
-## Prerequisites
-- Pico Debug Probe connected to the target via SWD
-- UART wired to debug probe: GP0=TX, GP1=RX
+- **Generative (default):** Autonomous pattern engine based on [Mutable Instruments Grids](https://mutable-instruments.net/modules/grids/) by Emilie Gillet. Drives solenoids with algorithmically generated rhythmic patterns.
+- **MIDI:** USB MIDI Note On/Off messages trigger solenoid pulses. Velocity controls pulse duration.
 
-## Build
+## Controls
+
+**User Key (GPIO 23):**
+- Short press (generative mode): randomize patterns
+- Long press (>1s): toggle between generative and MIDI mode
+
+## Hardware
+
+- Raspberry Pi Pico (RP2040)
+- 8 solenoid outputs on GPIO 2-9
+- Pico Debug Probe (CMSIS-DAP) for SWD + UART
+
+## Build & Upload
+
 ```bash
-make
+make            # build
+make upload     # flash via debug probe (falls back to USB/UF2)
 ```
 
-## Upload (OpenOCD)
-```bash
-make upload
-```
+## UART Monitor
 
-## Debugger
-Run OpenOCD in one terminal:
-```bash
-make debug-server
-```
-
-Connect GDB in another terminal (loads firmware, breaks at main):
-```bash
-make gdb
-```
-
-If you only want to attach without loading:
-```bash
-make gdb-attach
-```
-
-Helpful GDB commands:
-```
-monitor reset run
-monitor reset halt
-bt
-info registers
-```
-
-## UART Debug Output (Hello World)
-The firmware prints over UART at 115200 8N1.
-
-Quick monitor:
+115200 baud, 8N1:
 ```bash
 make uart-monitor
 ```
 
-Find the debug probe UART device:
-```bash
-ls /dev/serial/by-id
-```
+## MIDI Test
 
-Example read:
 ```bash
-UART_DEV=/dev/serial/by-id/usb-Raspberry_Pi_Debug_Probe__CMSIS-DAP__E6632891E3889E30-if01
-stty -F "$UART_DEV" 115200 cs8 -cstopb -parenb -echo -icanon -isig -iexten
-cat "$UART_DEV"
-```
-
-You should see lines like:
-```
-Hello World! Count: 0
-```
-
-## MIDI Test (amidi)
-List devices:
-```bash
-make midi-list
-```
-
-Send a Note On/Off sequence (defaults NOTE=60, VEL=64):
-```bash
-make midi-test
-```
-
-Manual note control:
-```bash
+make midi-list          # list ALSA MIDI devices
+make midi-test          # send Note On/Off sequence
 NOTE=60 VEL=100 make midi-note-on
 NOTE=60 make midi-note-off
 ```
 
-If you get permission errors, run the above with sudo or add your user to the `audio` group.
+## Debugging
+
+```bash
+make debug-server       # start OpenOCD
+make gdb                # connect GDB (loads firmware)
+make gdb-attach         # attach without loading
+```
+
+## Credits
+
+Generative engine adapted from [Grids](https://github.com/pichenettes/eurorack) by Emilie Gillet (Mutable Instruments), licensed under GPL3.0.
